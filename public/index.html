@@ -3,7 +3,9 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#0b0e13">
 <title>Server Dashboard</title>
+<link rel="manifest" href="/manifest.webmanifest">
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><text y='13' font-size='13'>🖥️</text></svg>">
 <link rel="stylesheet" href="/style.css">
 </head>
@@ -32,6 +34,7 @@
     <div class="topmeta">
       <div class="meta"><span>Uptime</span><strong id="uptime">—</strong></div>
       <div class="meta"><span>Address</span><strong id="address">—</strong></div>
+      <div class="meta" id="role-meta" hidden><span>Access</span><strong id="role">—</strong></div>
     </div>
   </header>
 
@@ -43,126 +46,277 @@
     <button class="btn btn-cancel" id="abort-btn">Cancel it</button>
   </div>
 
+  <div class="alertstrip" id="alert-strip" hidden></div>
+
+  <nav class="tabs" id="tabs">
+    <button class="tab active" data-tab="overview">Overview</button>
+    <button class="tab" data-tab="services">Services</button>
+    <button class="tab" data-tab="containers">Containers</button>
+    <button class="tab admin-only" data-tab="logs">Logs</button>
+    <button class="tab admin-only" data-tab="security">Security</button>
+    <button class="tab" data-tab="storage">Storage</button>
+    <button class="tab admin-only" data-tab="alerts">Alerts</button>
+  </nav>
+
   <main>
-    <section class="tiles">
-      <article class="tile">
-        <header><h2>CPU</h2><span id="cpu-model" class="sub">—</span></header>
-        <p class="big"><span id="cpu-pct">—</span><i>%</i></p>
-        <div class="bar"><div class="fill" id="cpu-bar"></div></div>
-        <div class="cores" id="cores"></div>
-        <p class="foot" id="cpu-foot" hidden></p>
-      </article>
 
-      <article class="tile">
-        <header><h2>Memory</h2><span id="mem-sub" class="sub">—</span></header>
-        <p class="big"><span id="mem-pct">—</span><i>%</i></p>
-        <div class="bar"><div class="fill" id="mem-bar"></div></div>
-        <p class="foot" id="mem-foot">—</p>
-      </article>
+    <!-- ============ OVERVIEW ============ -->
+    <section class="pane" data-pane="overview">
 
-      <article class="tile">
-        <header><h2>Storage</h2><span class="sub" id="disk-sub">—</span></header>
-        <p class="big"><span id="disk-free">—</span><i>free</i></p>
-        <div class="bar"><div class="fill" id="disk-bar"></div></div>
-        <p class="foot" id="disk-foot">—</p>
-      </article>
+      <div class="peers" id="peers" hidden></div>
 
-      <article class="tile">
-        <header><h2>Network</h2><span class="sub">live throughput</span></header>
-        <p class="big net"><span id="net-rx">—</span></p>
-        <p class="foot" id="net-foot">—</p>
-      </article>
+      <section class="tiles">
+        <article class="tile">
+          <header><h2>CPU</h2><span id="cpu-model" class="sub">—</span></header>
+          <p class="big"><span id="cpu-pct">—</span><i>%</i></p>
+          <div class="spark" id="spark-cpu"></div>
+          <div class="bar"><div class="fill" id="cpu-bar"></div></div>
+          <div class="cores" id="cores"></div>
+          <p class="foot" id="cpu-foot" hidden></p>
+        </article>
 
-      <article class="tile" id="gpu-tile" hidden>
-        <header><h2>GPU</h2><span class="sub" id="gpu-name">—</span></header>
-        <p class="big"><span id="gpu-pct">—</span><i id="gpu-unit">%</i></p>
-        <div class="bar"><div class="fill" id="gpu-bar"></div></div>
-        <p class="foot" id="gpu-foot">—</p>
-      </article>
+        <article class="tile">
+          <header><h2>Memory</h2><span id="mem-sub" class="sub">—</span></header>
+          <p class="big"><span id="mem-pct">—</span><i>%</i></p>
+          <div class="spark" id="spark-mem"></div>
+          <div class="bar"><div class="fill" id="mem-bar"></div></div>
+          <p class="foot" id="mem-foot">—</p>
+        </article>
 
-      <article class="tile" id="net-tile">
-        <header><h2>Internet</h2><span class="sub" id="inet-target">—</span></header>
-        <p class="big net"><span id="inet-latency">—</span></p>
-        <p class="foot" id="inet-foot">—</p>
-      </article>
-    </section>
+        <article class="tile">
+          <header><h2>Storage</h2><span class="sub" id="disk-sub">—</span></header>
+          <p class="big"><span id="disk-free">—</span><i>free</i></p>
+          <div class="spark" id="spark-diskPct"></div>
+          <div class="bar"><div class="fill" id="disk-bar"></div></div>
+          <p class="foot" id="disk-foot">—</p>
+        </article>
 
-    <section class="card attention" id="attention-card" hidden>
-      <header class="card-head"><h2>Needs attention</h2><span class="sub" id="attention-count"></span></header>
-      <div class="scroll" id="attention"></div>
-    </section>
+        <article class="tile">
+          <header><h2>Network</h2><span class="sub">live throughput</span></header>
+          <p class="big net"><span id="net-rx">—</span></p>
+          <div class="spark" id="spark-netRx"></div>
+          <p class="foot" id="net-foot">—</p>
+        </article>
 
-    <section class="card">
-      <header class="card-head"><h2>Drives</h2><span class="sub" id="drives-count"></span></header>
-      <div class="drives" id="drives"></div>
-    </section>
+        <article class="tile" id="gpu-tile" hidden>
+          <header><h2>GPU</h2><span class="sub" id="gpu-name">—</span></header>
+          <p class="big"><span id="gpu-pct">—</span><i id="gpu-unit">%</i></p>
+          <div class="spark" id="spark-gpu"></div>
+          <div class="bar"><div class="fill" id="gpu-bar"></div></div>
+          <p class="foot" id="gpu-foot">—</p>
+        </article>
 
-    <div class="split">
-      <section class="card">
-        <header class="card-head">
-          <h2>Listening on</h2><span class="sub" id="ports-count"></span>
-        </header>
-        <div class="scroll" id="ports"></div>
+        <article class="tile">
+          <header><h2>Internet</h2><span class="sub" id="inet-target">—</span></header>
+          <p class="big net"><span id="inet-latency">—</span></p>
+          <p class="foot" id="inet-foot">—</p>
+        </article>
+      </section>
+
+      <section class="card attention" id="attention-card" hidden>
+        <header class="card-head"><h2>Needs attention</h2><span class="sub" id="attention-count"></span></header>
+        <div class="scroll" id="attention"></div>
       </section>
 
       <section class="card">
         <header class="card-head">
-          <h2>Heaviest processes</h2><span class="sub">by memory</span>
+          <h2>Drives</h2>
+          <span class="sub" id="drives-count"></span>
         </header>
-        <div class="scroll" id="procs"></div>
-      </section>
-    </div>
-
-    <div class="split">
-      <section class="card" id="cpuprocs-card">
-        <header class="card-head">
-          <h2>Busiest processes</h2><span class="sub" id="cpuprocs-sub">by CPU</span>
-        </header>
-        <div class="scroll" id="cpuprocs"></div>
+        <div class="drives" id="drives"></div>
       </section>
 
-      <section class="card" id="users-card">
-        <header class="card-head">
-          <h2>Logged in</h2><span class="sub" id="users-count"></span>
-        </header>
-        <div class="scroll" id="users"></div>
-      </section>
-    </div>
-
-    <section class="card" id="containers-card" hidden>
-      <header class="card-head"><h2>Containers</h2><span class="sub" id="containers-count"></span></header>
-      <div class="scroll" id="containers"></div>
-    </section>
-
-    <section class="card" id="wsl-card" hidden>
-      <header class="card-head"><h2>WSL distributions</h2></header>
-      <div class="scroll" id="wsl"></div>
-    </section>
-
-    <section class="card">
-      <header class="card-head">
-        <h2>Running services</h2>
-        <input id="svc-filter" class="filter" type="search" placeholder="filter…" autocomplete="off">
-      </header>
-      <div class="scroll tall" id="services"></div>
-    </section>
-
-    <section class="card danger-card">
-      <header class="card-head"><h2>Power</h2><span class="sub" id="power-sub">—</span></header>
-      <p class="danger-note">
-        These act on <strong id="power-host">this machine</strong> immediately after the grace period.
-        You get a countdown and a cancel button before anything happens.
-      </p>
-      <div class="power-actions">
-        <button class="btn btn-warn" id="restart-btn">Restart</button>
-        <button class="btn btn-danger" id="shutdown-btn">Shut down</button>
+      <div class="split">
+        <section class="card">
+          <header class="card-head"><h2>Listening on</h2><span class="sub" id="ports-count"></span></header>
+          <div class="scroll" id="ports"></div>
+        </section>
+        <section class="card">
+          <header class="card-head"><h2>Heaviest processes</h2><span class="sub">by memory</span></header>
+          <div class="scroll" id="procs"></div>
+        </section>
       </div>
-      <p class="power-error" id="power-error" hidden></p>
+
+      <div class="split">
+        <section class="card">
+          <header class="card-head"><h2>Busiest processes</h2><span class="sub" id="cpuprocs-sub">by CPU</span></header>
+          <div class="scroll" id="cpuprocs"></div>
+        </section>
+        <section class="card">
+          <header class="card-head"><h2>Logged in</h2><span class="sub" id="users-count"></span></header>
+          <div class="scroll" id="users"></div>
+        </section>
+      </div>
+
+      <section class="card" id="wsl-card" hidden>
+        <header class="card-head"><h2>WSL distributions</h2></header>
+        <div class="scroll" id="wsl"></div>
+      </section>
+
+      <section class="card danger-card admin-only">
+        <header class="card-head"><h2>Power</h2><span class="sub" id="power-sub">—</span></header>
+        <p class="danger-note">
+          These act on <strong id="power-host">this machine</strong> after the grace period.
+          You get a countdown and a cancel button before anything happens.
+        </p>
+        <div class="power-actions">
+          <button class="btn btn-warn" id="restart-btn">Restart</button>
+          <button class="btn btn-danger" id="shutdown-btn">Shut down</button>
+        </div>
+        <p class="power-error" id="power-error" hidden></p>
+      </section>
     </section>
+
+    <!-- ============ SERVICES ============ -->
+    <section class="pane" data-pane="services" hidden>
+      <section class="card">
+        <header class="card-head">
+          <h2>Running services</h2>
+          <input id="svc-filter" class="filter" type="search" placeholder="filter…" autocomplete="off">
+        </header>
+        <div class="scroll tall" id="services"></div>
+      </section>
+    </section>
+
+    <!-- ============ CONTAINERS ============ -->
+    <section class="pane" data-pane="containers" hidden>
+      <section class="card">
+        <header class="card-head">
+          <h2>Containers</h2>
+          <span class="sub" id="containers-count"></span>
+        </header>
+        <div class="scroll tall" id="containers"></div>
+      </section>
+    </section>
+
+    <!-- ============ LOGS ============ -->
+    <section class="pane" data-pane="logs" hidden>
+      <section class="card">
+        <header class="card-head">
+          <h2>Logs</h2>
+          <div class="logbar">
+            <select id="log-source" class="filter">
+              <option value="system">System journal</option>
+              <option value="unit">Service unit</option>
+              <option value="container">Container</option>
+            </select>
+            <input id="log-name" class="filter" type="text" placeholder="name…" autocomplete="off" hidden>
+            <select id="log-lines" class="filter narrow">
+              <option>100</option><option selected>200</option><option>500</option><option>1000</option>
+            </select>
+            <label class="check"><input type="checkbox" id="log-follow"> follow</label>
+            <button class="btn btn-small" id="log-fetch">Fetch</button>
+          </div>
+        </header>
+        <pre class="logs" id="log-output">Pick a source and press Fetch.</pre>
+      </section>
+    </section>
+
+    <!-- ============ SECURITY ============ -->
+    <section class="pane" data-pane="security" hidden>
+      <section class="tiles">
+        <article class="tile">
+          <header><h2>Pending updates</h2><span class="sub" id="upd-sub">—</span></header>
+          <p class="big"><span id="upd-count">—</span></p>
+          <p class="foot" id="upd-foot">—</p>
+        </article>
+        <article class="tile">
+          <header><h2>Failed logins</h2><span class="sub">last 7 days</span></header>
+          <p class="big"><span id="login-count">—</span></p>
+          <p class="foot" id="login-foot">—</p>
+        </article>
+        <article class="tile">
+          <header><h2>Firewall</h2><span class="sub" id="fw-sub">—</span></header>
+          <p class="big"><span id="fw-state">—</span></p>
+          <p class="foot" id="fw-foot">—</p>
+        </article>
+        <article class="tile" id="f2b-tile" hidden>
+          <header><h2>fail2ban</h2><span class="sub" id="f2b-sub">—</span></header>
+          <p class="big"><span id="f2b-banned">—</span></p>
+          <p class="foot" id="f2b-foot">—</p>
+        </article>
+      </section>
+
+      <section class="card">
+        <header class="card-head"><h2>Port exposure</h2><span class="sub">what is reachable from off this machine</span></header>
+        <div class="scroll" id="exposure"></div>
+      </section>
+
+      <div class="split">
+        <section class="card">
+          <header class="card-head"><h2>Attacking IPs</h2><span class="sub">most failed attempts</span></header>
+          <div class="scroll" id="top-ips"></div>
+        </section>
+        <section class="card">
+          <header class="card-head"><h2>Recent failed logins</h2></header>
+          <div class="scroll" id="recent-logins"></div>
+        </section>
+      </div>
+
+      <section class="card">
+        <header class="card-head"><h2>Upgradable packages</h2><span class="sub" id="pkg-sub"></span></header>
+        <div class="scroll" id="packages"></div>
+      </section>
+    </section>
+
+    <!-- ============ STORAGE ============ -->
+    <section class="pane" data-pane="storage" hidden>
+      <section class="card">
+        <header class="card-head">
+          <h2>Disk health</h2>
+          <span class="sub" id="smart-sub">SMART</span>
+        </header>
+        <div class="scroll" id="smart"></div>
+      </section>
+
+      <section class="card admin-only">
+        <header class="card-head">
+          <h2>What is using the space</h2>
+          <div class="logbar">
+            <select id="scan-path" class="filter"></select>
+            <button class="btn btn-small" id="scan-btn">Scan</button>
+          </div>
+        </header>
+        <p class="danger-note" id="scan-note">
+          Sums each top-level directory. Fast on Linux (<code>du</code>); on Windows a large system drive can take minutes or time out.
+        </p>
+        <div class="scroll tall" id="scan-result"></div>
+      </section>
+    </section>
+
+    <!-- ============ ALERTS ============ -->
+    <section class="pane" data-pane="alerts" hidden>
+      <section class="card">
+        <header class="card-head">
+          <h2>Alerting</h2>
+          <span class="sub" id="alert-state">—</span>
+        </header>
+        <p class="danger-note" id="alert-help">
+          Alerts are configured in <code>config.json</code> under <code>alerts</code>. Set
+          <code>enabled: true</code> and a <code>webhook</code> URL — Discord, Slack and
+          ntfy are detected automatically, anything else receives a plain JSON POST.
+        </p>
+        <div class="power-actions">
+          <button class="btn btn-small" id="alert-test">Send test notification</button>
+        </div>
+        <p class="power-error" id="alert-error" hidden></p>
+      </section>
+
+      <section class="card">
+        <header class="card-head"><h2>Thresholds</h2></header>
+        <div class="scroll" id="alert-rules"></div>
+      </section>
+
+      <section class="card">
+        <header class="card-head"><h2>Recent alert activity</h2></header>
+        <div class="scroll" id="alert-log"></div>
+      </section>
+    </section>
+
   </main>
 
   <footer class="foot-note">
-    Polling every 2s · <span id="stamp">—</span>
+    Polling every 2s · <span id="stamp">—</span> · <span id="hist-note"></span>
     <button class="linkish" id="forget">forget token</button>
   </footer>
 </div>
@@ -177,6 +331,8 @@
     </div>
   </div>
 </div>
+
+<div class="toast" id="toast" hidden></div>
 
 <script src="/app.js"></script>
 </body>

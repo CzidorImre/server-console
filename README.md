@@ -30,6 +30,46 @@ GPU, without Docker or without temperature sensors simply shows fewer cards.
 The page polls every 2s and pauses while the tab is in the background. Cheap data
 refreshes every ~1.5s; the heavier service/port scan is cached for 10s.
 
+## What it does
+
+**Overview** — live tiles with 3-hour sparklines, drives, listening ports, heaviest and
+busiest processes, logged-in sessions, and the power controls.
+
+**Services / Containers** — every running unit and container, each with restart, stop and
+"show logs" buttons. Containers also get a pull button that runs `docker compose pull &&
+up -d` for that container's project, discovered from its own labels.
+
+**Logs** — tail the system journal, one unit, or one container, with an optional
+5-second follow.
+
+**Security** — pending updates (with security ones flagged), failed SSH logins grouped by
+source IP, fail2ban jail status, and a port-exposure table that cross-references what is
+listening against the firewall rules, so you can see what is actually reachable from off
+the machine rather than just what is bound.
+
+**Storage** — SMART health per device (temperature, wear, reallocated sectors) and an
+on-demand "what is using the space" scan.
+
+**Alerts** — thresholds evaluated every 30s against disk, memory, sustained CPU,
+temperatures, failed units, stopped containers and connectivity. A rule fires once, stays
+quiet for 30 minutes while it remains true, and sends a resolved message when it clears.
+
+**Multi-host** — point one dashboard at others and their status appears as a strip across
+the top of Overview.
+
+**History** — a 24-hour ring buffer at 30-second resolution, kept in `data/history.json`.
+No database: it is a plain file, written atomically, restored on restart.
+
+Installable as a PWA. A service worker caches the shell so the page still renders when the
+server is unreachable; `/api/` responses are never cached.
+
+## Two tokens
+
+`config.json` holds two credentials. `token` is full access. `viewerToken` is read-only:
+it can see Overview, Services, Containers and Storage, but cannot restart or shut down the
+machine, control services or containers, read logs, or view the Security tab. The console
+prints both URLs at startup.
+
 ## Install on a Linux server
 
 Clone it into place and run the installer:
@@ -88,7 +128,10 @@ Restart and shutdown both pass three gates:
 Every power request is logged with the caller's address.
 
 The action name from a request is only ever used as a key into a fixed table of verbs —
-nothing the caller sends reaches a command line.
+nothing the caller sends reaches a command line. The same applies to service and container
+control: actions index a fixed table, names must match a strict pattern before being passed
+as a single argv element, and the dashboard refuses to stop its own service. Every power,
+service, container and scan request is written to the log with the caller's address.
 
 **Linux** holds the countdown inside the dashboard process and then calls
 `systemctl reboot` / `systemctl poweroff` (systemd's own `shutdown` only accepts whole
@@ -128,6 +171,48 @@ Generated on first run, next to `server.js`. Restart the service after editing.
 | `useSudo` | `false` | Linux: run the power verbs through `sudo -n`. |
 | `internetCheck` | `true` | Measure reachability with a TCP connect to 1.1.1.1 / 8.8.8.8. |
 | `publicIp` | `true` | Additionally ask `api.ipify.org` for this machine's external IP. |
+| `viewerToken` | random | Read-only credential. |
+| `manageEnabled` | `true` | Set `false` to forbid service and container control entirely. |
+| `alerts.enabled` | `false` | Turn threshold alerting on. |
+| `alerts.webhook` | `""` | Discord, Slack and ntfy URLs are detected; anything else gets JSON. |
+| `alerts.rules` | see below | Override any threshold. |
+| `peers` | `[]` | `[{ "name": "nas", "url": "http://10.0.0.5:8477", "token": "..." }]` |
+| `tls.cert` / `tls.key` | `""` | Paths to a certificate and key. Both set means HTTPS. |
+
+### Alert rules
+
+Defaults, all overridable under `alerts.rules`:
+
+```json
+{
+  "diskPercent": 90,
+  "memPercent": 92,
+  "cpuPercent": 95,
+  "cpuTemp": 85,
+  "gpuTemp": 85,
+  "failedUnits": true,
+  "containersExited": true,
+  "offline": true
+}
+```
+
+Percentages fire when the value is at or above the number; set one to `0` to disable it.
+The CPU rule needs four consecutive samples (about two minutes) so a single spike is not
+an incident. Example configuration:
+
+```json
+"alerts": {
+  "enabled": true,
+  "webhook": "https://discord.com/api/webhooks/...",
+  "rules": { "diskPercent": 85, "cpuTemp": 80 }
+}
+```
+
+### Serving over HTTPS
+
+Point `tls.cert` and `tls.key` at a certificate pair and the dashboard serves HTTPS
+directly. With a self-signed certificate browsers will warn; for a trusted certificate,
+put Caddy or nginx in front instead and leave the dashboard on loopback.
 
 ### Outbound connections
 
@@ -165,6 +250,12 @@ lib/metrics.js         platform dispatch, caching, CPU and network rate math
 lib/power.js           the only place reboot/shutdown is invoked
 lib/collect-linux.js   /proc, df, ss, ps, systemctl, docker, nvidia-smi (+ parsers)
 lib/internet.js        reachability probe and public IP lookup
+lib/history.js         24h ring buffer, persisted atomically to data/history.json
+lib/alerts.js          threshold rules, cooldown, and webhook delivery
+lib/manage.js          service/container control and log tailing
+lib/security.js        SSH failures, fail2ban, updates, port exposure
+lib/storage.js         SMART health and directory usage
+lib/peers.js           polls other dashboards for the multi-host strip
 lib/collect-win.js     wraps the two PowerShell collectors
 lib/collect-*.ps1      Windows data collection
 public/                the dashboard page

@@ -6,6 +6,7 @@
 import os from 'node:os';
 import { execFile } from 'node:child_process';
 import { getMetrics, targetPlatform } from './lib/metrics.js';
+import * as storage from './lib/storage.js';
 
 const GB = (n) => (n / 1e9).toFixed(1) + ' GB';
 const B = (n) => {
@@ -18,6 +19,9 @@ const pad = (s, n) => String(s).padEnd(n);
 
 function ok(label, detail) {
   console.log(`  \x1b[32m✓\x1b[0m ${pad(label, 22)} ${detail}`);
+}
+function dim(label, detail) {
+  console.log(`  \x1b[90m·\x1b[0m ${pad(label, 22)} ${detail}`);
 }
 function warn(label, detail) {
   console.log(`  \x1b[33m!\x1b[0m ${pad(label, 22)} ${detail}`);
@@ -119,6 +123,57 @@ if (process.platform === 'win32') {
     console.log('      to /etc/sudoers.d/server-dashboard and set "useSudo": true');
   }
 }
+
+/* ---------------- capabilities ---------------- */
+
+console.log('\nMANAGEMENT AND EXTRAS');
+
+const have = (cmd, args = ['--version']) => sh(cmd, args);
+
+if (process.platform === 'win32') {
+  ok('service control', 'PowerShell Start/Stop/Restart-Service (dashboard must be elevated)');
+  ok('logs', 'Windows event log via Get-WinEvent');
+} else {
+  const root = process.getuid && process.getuid() === 0;
+  if (root) ok('service control', 'systemctl as root');
+  else if (await sh('sudo', ['-n', 'true'])) ok('service control', 'via passwordless sudo - set "useSudo": true');
+  else warn('service control', 'not root and no passwordless sudo - start/stop will fail');
+
+  if (await have('journalctl')) ok('logs', 'journalctl');
+  else warn('logs', 'journalctl not found');
+
+  if (await have('fail2ban-client')) ok('fail2ban', 'installed');
+  else dim('fail2ban', 'not installed');
+
+  if (await have('ufw')) ok('firewall', 'ufw present - port exposure can be judged');
+  else warn('firewall', 'no ufw - every LAN-reachable port is treated as exposed');
+
+  if (await have('smartctl')) ok('smartctl', 'installed');
+  else warn('smartctl', 'not installed - no disk health. apt install smartmontools');
+
+  if (await have('du')) ok('storage scan', 'du available');
+  else warn('storage scan', 'du not found');
+}
+
+if (await have('docker')) ok('docker', `${s.containers.length} container(s) visible`);
+else dim('docker', 'not installed');
+
+const smartDisks = await storage.smart();
+if (smartDisks.length) {
+  ok('disk health', `${smartDisks.length} device(s)`);
+  for (const d of smartDisks) {
+    const bits = [d.model];
+    if (d.temp) bits.push(`${d.temp}C`);
+    if (d.percentUsed != null) bits.push(`${d.percentUsed}% wear`);
+    console.log(`      ${d.passed === false ? 'FAILING' : 'ok     '} ${bits.join(' - ')}`);
+  }
+} else {
+  dim('disk health', 'unavailable');
+}
+
+console.log('\nHISTORY AND ALERTS');
+dim('history', 'kept in data/history.json, 24h at 30s resolution');
+dim('alerts', 'configure under "alerts" in config.json, then test from the Alerts tab');
 
 if (s.degraded.fast || s.degraded.slow) {
   console.log(`\n  \x1b[33mSome collectors returned nothing:\x1b[0m ${JSON.stringify(s.degraded)}`);
