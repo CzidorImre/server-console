@@ -1,4 +1,4 @@
-# Slow-cycle collector: OS identity, running services, listening TCP ports, WSL distros.
+# Slow-cycle collector: OS identity, services, listening ports, GPUs, sessions, WSL.
 $ErrorActionPreference = 'SilentlyContinue'
 [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
 
@@ -13,7 +13,17 @@ $services = @(Get-Service | Where-Object { $_.Status -eq 'Running' } | Sort-Obje
   [pscustomobject]@{ name = [string]$_.Name; display = [string]$_.DisplayName; start = [string]$_.StartType }
 })
 
-# Map owning PIDs to process names so ports read as "what is listening", not just numbers.
+# Closest Windows analogue to a failed systemd unit. Auto-start + stopped is NOT
+# enough: many auto/trigger-start services sit idle by design. A non-zero exit code
+# that is not 1077 (ERROR_SERVICE_NEVER_STARTED) means it actually died.
+$failed = @(Get-CimInstance Win32_Service -Filter "StartMode='Auto' AND State!='Running' AND ExitCode!=0 AND ExitCode!=1077" | ForEach-Object {
+  [pscustomobject]@{
+    name    = [string]$_.Name
+    display = [string]$_.DisplayName
+    detail  = "exit code $($_.ExitCode)"
+  }
+})
+
 $pn = @{}
 Get-Process | ForEach-Object { $pn[[int]$_.Id] = $_.ProcessName }
 
@@ -25,6 +35,46 @@ $ports = @(Get-NetTCPConnection -State Listen | Sort-Object LocalPort -Unique | 
     pid  = [int]$_.OwningProcess
   }
 })
+
+# nvidia-smi gives live load; the WMI adapter list is a name-only fallback. WMI's
+# AdapterRAM is a 32-bit field that lies about anything over 4 GB, so it is not used.
+$gpus = @()
+if (Get-Command nvidia-smi -ErrorAction SilentlyContinue) {
+  $raw = & nvidia-smi --query-gpu=name,utilization.gpu,memory.used,memory.total,temperature.gpu,power.draw --format=csv,noheader,nounits 2>$null
+  foreach ($line in @($raw)) {
+    if (-not $line) { continue }
+    $f = $line -split ',' | ForEach-Object { $_.Trim() }
+    $num = { param($v) $out = 0.0; if ([double]::TryParse($v, [ref]$out)) { $out } else { $null } }
+    $gpus += [pscustomobject]@{
+      name     = [string]$f[0]
+      util     = & $num $f[1]
+      memUsed  = if ((& $num $f[2]) -ne $null) { [int64]((& $num $f[2]) * 1MB) } else { $null }
+      memTotal = if ((& $num $f[3]) -ne $null) { [int64]((& $num $f[3]) * 1MB) } else { $null }
+      temp     = & $num $f[4]
+      power    = & $num $f[5]
+      source   = 'nvidia-smi'
+    }
+  }
+}
+if ($gpus.Count -eq 0) {
+  $gpus = @(Get-CimInstance Win32_VideoController | ForEach-Object {
+    [pscustomobject]@{
+      name     = [string]$_.Name
+      util     = $null
+      memUsed  = $null
+      memTotal = $null
+      temp     = $null
+      power    = $null
+      source   = 'wmi'
+    }
+  })
+}
+
+$users = @()
+$cs = Get-CimInstance Win32_ComputerSystem
+if ($cs -and $cs.UserName) {
+  $users += [pscustomobject]@{ user = [string]$cs.UserName; tty = 'console'; since = ''; from = 'local' }
+}
 
 $wsl = @()
 if (Get-Command wsl.exe -ErrorAction SilentlyContinue) {
@@ -42,4 +92,13 @@ if (Get-Command wsl.exe -ErrorAction SilentlyContinue) {
   }
 }
 
-[pscustomobject]@{ sys = $sys; services = $services; ports = $ports; wsl = $wsl } | ConvertTo-Json -Depth 4 -Compress
+[pscustomobject]@{
+  sys        = $sys
+  services   = $services
+  failed     = $failed
+  ports      = $ports
+  gpus       = $gpus
+  users      = $users
+  wsl        = $wsl
+  containers = @()
+} | ConvertTo-Json -Depth 4 -Compress

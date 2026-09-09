@@ -99,14 +99,128 @@ function renderCpu(cpu) {
     el.title = `core ${i}: ${v.toFixed(0)}%`;
   });
 
-  // Load average is only meaningful on Linux; Windows reports zeroes.
+  // Load average is Linux-only; clock speed and temperature depend on the hardware
+  // exposing them, so each part appears only when there is a real reading.
+  const bits = [];
+  if (cpu.load) bits.push('load ' + cpu.load.map((n) => n.toFixed(2)).join(' '));
+  if (cpu.mhz) bits.push((cpu.mhz / 1000).toFixed(2) + ' GHz');
+  if (cpu.temp) bits.push(Math.round(cpu.temp) + '°C');
   const foot = $('cpu-foot');
-  if (cpu.load) {
-    foot.hidden = false;
-    foot.textContent = 'load ' + cpu.load.map((n) => n.toFixed(2)).join('  ');
-  } else {
-    foot.hidden = true;
+  foot.hidden = bits.length === 0;
+  foot.textContent = bits.join(' · ');
+}
+
+function renderGpu(gpus) {
+  const tile = $('gpu-tile');
+  if (!gpus.length) {
+    tile.hidden = true;
+    return;
   }
+  tile.hidden = false;
+  const g = gpus[0];
+  $('gpu-name').textContent = gpus.length > 1 ? `${g.name} +${gpus.length - 1}` : g.name;
+  $('gpu-name').title = gpus.map((x) => x.name).join('\n');
+
+  if (typeof g.util === 'number') {
+    $('gpu-pct').textContent = g.util.toFixed(0);
+    $('gpu-unit').hidden = false;
+    setBar($('gpu-bar'), g.util);
+    $('gpu-bar').parentElement.hidden = false;
+  } else {
+    // No live metrics available (no nvidia-smi) — name the adapter and say so.
+    $('gpu-pct').textContent = 'present';
+    $('gpu-unit').hidden = true;
+    $('gpu-bar').parentElement.hidden = true;
+  }
+
+  const bits = [];
+  if (g.memTotal) bits.push(`${bytes(g.memUsed)} / ${bytes(g.memTotal)}`);
+  if (g.temp) bits.push(Math.round(g.temp) + '°C');
+  if (g.power) bits.push(g.power.toFixed(0) + ' W');
+  if (!bits.length) bits.push('no live metrics — install nvidia-smi for load');
+  $('gpu-foot').textContent = bits.join(' · ');
+}
+
+function renderInternet(n) {
+  if (!n || n.enabled === false) {
+    $('inet-latency').textContent = 'off';
+    $('inet-target').textContent = 'checks disabled';
+    $('inet-foot').textContent = 'set internetCheck: true in config.json';
+    return;
+  }
+  if (n.online) {
+    $('inet-latency').innerHTML = `${Math.round(n.latency)}<i> ms</i>`;
+    $('inet-target').textContent = 'reachable';
+    $('inet-foot').textContent = n.publicIp ? `public IP ${n.publicIp} · via ${n.target}` : `via ${n.target}`;
+  } else {
+    $('inet-latency').textContent = 'offline';
+    $('inet-target').textContent = 'unreachable';
+    $('inet-foot').textContent = 'no outbound connection';
+  }
+}
+
+function renderAttention(failed) {
+  const card = $('attention-card');
+  if (!failed.length) {
+    card.hidden = true;
+    return;
+  }
+  card.hidden = false;
+  $('attention-count').textContent = `${failed.length} not running`;
+  $('attention').innerHTML = failed
+    .map(
+      (f) => `
+        <div class="row">
+          <div class="l"><span class="name">${esc(f.display || f.name)}</span></div>
+          <span class="r">${esc(f.detail || f.name)}</span>
+        </div>`
+    )
+    .join('');
+}
+
+function renderCpuProcs(list, unit) {
+  const seconds = unit === 'seconds';
+  $('cpuprocs-sub').textContent = seconds ? 'total CPU time used' : 'live % of one core';
+  const fmt = (v) => (seconds ? formatSeconds(v) : v.toFixed(1) + '%');
+
+  $('cpuprocs').innerHTML = list.length
+    ? list
+        .map(
+          (p) => `
+        <div class="row">
+          <div class="l">
+            <span class="pill plain">${esc(p.pid)}</span>
+            <span class="name">${esc(p.name)}</span>
+          </div>
+          <span class="r">${fmt(p.cpu)}</span>
+        </div>`
+        )
+        .join('')
+    : '<p class="empty">No CPU activity to report.</p>';
+}
+
+function formatSeconds(s) {
+  if (s < 60) return s.toFixed(0) + 's';
+  if (s < 3600) return Math.floor(s / 60) + 'm ' + Math.round(s % 60) + 's';
+  return Math.floor(s / 3600) + 'h ' + Math.round((s % 3600) / 60) + 'm';
+}
+
+function renderUsers(list) {
+  $('users-count').textContent = list.length ? `${list.length} session(s)` : '';
+  $('users').innerHTML = list.length
+    ? list
+        .map(
+          (u) => `
+        <div class="row">
+          <div class="l">
+            <span class="pill plain">${esc(u.tty || '—')}</span>
+            <span class="name">${esc(u.user)}</span>
+          </div>
+          <span class="r">${esc(u.from || '')} ${esc(u.since || '')}</span>
+        </div>`
+        )
+        .join('')
+    : '<p class="empty">Nobody logged in interactively.</p>';
 }
 
 function renderMemory(m) {
@@ -142,7 +256,7 @@ function renderContainers(list) {
     .join('');
 }
 
-function renderDisks(disks) {
+function renderDisks(disks, io) {
   $('drives-count').textContent = disks.length ? `${disks.length} mounted` : '';
 
   // Headline tile follows the system drive: C: on Windows, / on Linux.
@@ -153,7 +267,9 @@ function renderDisks(disks) {
     $('disk-free').textContent = bytes(primary.free);
     setBar($('disk-bar'), usedPct);
     $('disk-sub').textContent = primary.id === '/' ? 'root filesystem' : `${primary.id} system drive`;
-    $('disk-foot').textContent = `${usedPct.toFixed(0)}% used of ${bytes(primary.size)}`;
+    let foot = `${usedPct.toFixed(0)}% used of ${bytes(primary.size)}`;
+    if (io && (io.read || io.write)) foot += ` · r ${rate(io.read)} · w ${rate(io.write)}`;
+    $('disk-foot').textContent = foot;
   }
 
   $('drives').innerHTML = disks.length
@@ -331,10 +447,15 @@ async function tick() {
     renderHost(s.host);
     renderCpu(s.cpu);
     renderMemory(s.memory);
-    renderDisks(s.disks);
+    renderDisks(s.disks, s.diskIo);
     renderNet(s.network);
+    renderGpu(s.gpus || []);
+    renderInternet(s.internet);
+    renderAttention(s.failed || []);
     renderPorts(s.ports);
     renderProcs(s.processes);
+    renderCpuProcs(s.processesByCpu || [], s.processesByCpuUnit);
+    renderUsers(s.users || []);
     renderContainers(s.containers || []);
     renderWsl(s.wsl);
     renderServices(s.services);

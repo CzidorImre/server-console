@@ -8,15 +8,24 @@ startup and uses the right collectors:
 
 | | Linux | Windows |
 |---|---|---|
-| CPU | `os.cpus()` deltas + `os.loadavg()` | `os.cpus()` deltas |
-| Memory | `/proc/meminfo` (**MemAvailable**, not MemFree) | `os.totalmem` / `os.freemem` |
+| CPU | `os.cpus()` deltas, `os.loadavg()`, `/proc/cpuinfo` MHz | `os.cpus()` deltas, `Win32_Processor` |
+| CPU temp | `/sys/class/thermal` (package sensor preferred) | `MSAcpi_ThermalZoneTemperature` (rarely exposed) |
+| Memory | `/proc/meminfo` (**MemAvailable**, not MemFree) + swap | `os.totalmem` / `os.freemem` |
+| GPU | `nvidia-smi`, falling back to `lspci` for the name | `nvidia-smi`, falling back to `Win32_VideoController` |
 | Disks | `df -PB1 -T`, pseudo filesystems filtered out | `Win32_LogicalDisk`, fixed drives |
+| Disk I/O | `/proc/diskstats` (partitions excluded) | `Win32_PerfFormattedData_PerfDisk_LogicalDisk` |
 | Network | `/proc/net/dev` | `Get-NetAdapterStatistics` |
+| Internet | TCP connect to 1.1.1.1 / 8.8.8.8 + optional public IP | same |
 | Ports | `ss -lntp` | `Get-NetTCPConnection` |
-| Processes | `ps -eo pid,rss,comm` | `Get-Process` |
+| Processes | `ps` by RSS and by %CPU | `Get-Process` by working set and CPU time |
 | Services | `systemctl list-units --state=running` | `Get-Service` |
+| Needs attention | `systemctl --state=failed` | auto-start services with a real failure exit code |
+| Sessions | `who` | `Win32_ComputerSystem.UserName` |
 | Containers | `docker ps` (panel hidden if absent) | — |
 | Extra | — | WSL distributions |
+
+Every panel hides itself when its data source is unavailable, so a machine without a
+GPU, without Docker or without temperature sensors simply shows fewer cards.
 
 The page polls every 2s and pauses while the tab is in the background. Cheap data
 refreshes every ~1.5s; the heavier service/port scan is cached for 10s.
@@ -117,6 +126,16 @@ Generated on first run, next to `server.js`. Restart the service after editing.
 | `powerEnabled` | `true` | Set `false` to serve stats but refuse restart/shutdown entirely. |
 | `graceSeconds` | `30` | Cancellable delay before the machine goes down. |
 | `useSudo` | `false` | Linux: run the power verbs through `sudo -n`. |
+| `internetCheck` | `true` | Measure reachability with a TCP connect to 1.1.1.1 / 8.8.8.8. |
+| `publicIp` | `true` | Additionally ask `api.ipify.org` for this machine's external IP. |
+
+### Outbound connections
+
+Everything else is collected locally. The only traffic this dashboard originates is the
+internet check: a TCP connect to 1.1.1.1 (then 8.8.8.8) for latency, and — if `publicIp`
+is on — an HTTPS request to `api.ipify.org`, which necessarily reveals the machine's IP
+to that service. Both run at most once a minute. Set either key to `false` and nothing
+leaves the machine.
 
 ### Reaching it from another machine
 
@@ -144,7 +163,8 @@ server.js              HTTP server, auth, routing
 selftest.js            what can I see here, and will power work? (safe to run)
 lib/metrics.js         platform dispatch, caching, CPU and network rate math
 lib/power.js           the only place reboot/shutdown is invoked
-lib/collect-linux.js   /proc, df, ss, ps, systemctl, docker  (+ exported parsers)
+lib/collect-linux.js   /proc, df, ss, ps, systemctl, docker, nvidia-smi (+ parsers)
+lib/internet.js        reachability probe and public IP lookup
 lib/collect-win.js     wraps the two PowerShell collectors
 lib/collect-*.ps1      Windows data collection
 public/                the dashboard page

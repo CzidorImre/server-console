@@ -8,6 +8,12 @@ import { execFile } from 'node:child_process';
 import { getMetrics, targetPlatform } from './lib/metrics.js';
 
 const GB = (n) => (n / 1e9).toFixed(1) + ' GB';
+const B = (n) => {
+  const u = ['B', 'KB', 'MB', 'GB', 'TB'];
+  let i = 0;
+  while (n >= 1024 && i < u.length - 1) { n /= 1024; i++; }
+  return n.toFixed(n < 10 && i > 0 ? 1 : 0) + ' ' + u[i];
+};
 const pad = (s, n) => String(s).padEnd(n);
 
 function ok(label, detail) {
@@ -62,7 +68,36 @@ else warn('services', 'none found — is this a systemd machine?');
 if (s.containers.length) ok('containers', `${s.containers.length} running`);
 else console.log(`  \x1b[90m·\x1b[0m ${pad('containers', 22)} docker not present or no containers`);
 
+if (s.gpus.length) {
+  const g = s.gpus[0];
+  if (typeof g.util === 'number') {
+    ok('gpu', `${g.name} — ${g.util}%, ${GB(g.memUsed)} of ${GB(g.memTotal)}, ${g.temp}°C`);
+  } else {
+    warn('gpu', `${g.name} detected, but no live metrics (install nvidia-smi for load)`);
+  }
+} else {
+  console.log(`  \x1b[90m·\x1b[0m ${pad('gpu', 22)} none detected`);
+}
+
+if (s.cpu.temp) ok('cpu temperature', `${Math.round(s.cpu.temp)}°C`);
+else console.log(`  \x1b[90m·\x1b[0m ${pad('cpu temperature', 22)} no sensor exposed`);
+
 ok('network', `${GB(s.network.totalRx)} in / ${GB(s.network.totalTx)} out since boot`);
+ok('disk i/o', `read ${B(s.diskIo.read)}/s · write ${B(s.diskIo.write)}/s right now`);
+
+if (s.internet.enabled === false) {
+  console.log(`  \x1b[90m·\x1b[0m ${pad('internet', 22)} checks disabled in config`);
+} else if (s.internet.online) {
+  ok('internet', `${Math.round(s.internet.latency)} ms via ${s.internet.target}` +
+    (s.internet.publicIp ? ` · public IP ${s.internet.publicIp}` : ''));
+} else {
+  warn('internet', 'no outbound connection');
+}
+
+if (s.failed.length) warn('failed units', `${s.failed.length} — see the dashboard`);
+else ok('failed units', 'none');
+
+if (s.users.length) ok('sessions', s.users.map((u) => `${u.user}@${u.tty}`).join(', '));
 
 const addr = s.host.addresses[0];
 if (addr) ok('address', `${addr.address} (${addr.iface})`);

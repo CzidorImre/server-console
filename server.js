@@ -3,7 +3,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
 import { fileURLToPath } from 'node:url';
-import { getMetrics } from './lib/metrics.js';
+import { getMetrics, configureInternet } from './lib/metrics.js';
 import { powerAction, getPending, getLastError } from './lib/power.js';
 
 const ROOT = path.dirname(fileURLToPath(import.meta.url));
@@ -47,6 +47,18 @@ function loadConfig() {
     cfg.useSudo = false;
     changed = true;
   }
+  // The only feature that makes an outbound connection. internetCheck opens a TCP
+  // connection to 1.1.1.1/8.8.8.8 to measure latency; publicIp additionally asks
+  // api.ipify.org what this machine's external address is. Set either to false and
+  // nothing leaves the machine.
+  if (typeof cfg.internetCheck !== 'boolean') {
+    cfg.internetCheck = true;
+    changed = true;
+  }
+  if (typeof cfg.publicIp !== 'boolean') {
+    cfg.publicIp = true;
+    changed = true;
+  }
   if (changed) fs.writeFileSync(CONFIG_PATH, JSON.stringify(cfg, null, 2));
   // Env overrides win over the file, for running a second instance or a quick test.
   if (process.env.DASH_PORT) cfg.port = Number(process.env.DASH_PORT);
@@ -55,6 +67,7 @@ function loadConfig() {
 }
 
 const cfg = loadConfig();
+configureInternet({ enabled: cfg.internetCheck, publicIp: cfg.publicIp });
 
 function tokenOk(req, url) {
   const given = req.headers['x-dash-token'] || url.searchParams.get('token') || '';

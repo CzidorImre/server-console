@@ -72,6 +72,24 @@
         <p class="big net"><span id="net-rx">—</span></p>
         <p class="foot" id="net-foot">—</p>
       </article>
+
+      <article class="tile" id="gpu-tile" hidden>
+        <header><h2>GPU</h2><span class="sub" id="gpu-name">—</span></header>
+        <p class="big"><span id="gpu-pct">—</span><i id="gpu-unit">%</i></p>
+        <div class="bar"><div class="fill" id="gpu-bar"></div></div>
+        <p class="foot" id="gpu-foot">—</p>
+      </article>
+
+      <article class="tile" id="net-tile">
+        <header><h2>Internet</h2><span class="sub" id="inet-target">—</span></header>
+        <p class="big net"><span id="inet-latency">—</span></p>
+        <p class="foot" id="inet-foot">—</p>
+      </article>
+    </section>
+
+    <section class="card attention" id="attention-card" hidden>
+      <header class="card-head"><h2>Needs attention</h2><span class="sub" id="attention-count"></span></header>
+      <div class="scroll" id="attention"></div>
     </section>
 
     <section class="card">
@@ -92,6 +110,22 @@
           <h2>Heaviest processes</h2><span class="sub">by memory</span>
         </header>
         <div class="scroll" id="procs"></div>
+      </section>
+    </div>
+
+    <div class="split">
+      <section class="card" id="cpuprocs-card">
+        <header class="card-head">
+          <h2>Busiest processes</h2><span class="sub" id="cpuprocs-sub">by CPU</span>
+        </header>
+        <div class="scroll" id="cpuprocs"></div>
+      </section>
+
+      <section class="card" id="users-card">
+        <header class="card-head">
+          <h2>Logged in</h2><span class="sub" id="users-count"></span>
+        </header>
+        <div class="scroll" id="users"></div>
       </section>
     </div>
 
