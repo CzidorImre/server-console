@@ -1,0 +1,12 @@
+{
+  "name": "server-dashboard",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Local dashboard for a Windows server: live stats, what's running, storage, and guarded power controls.",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "engines": { "node": ">=20" }
+}

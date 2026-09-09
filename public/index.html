@@ -1,0 +1,149 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Server Dashboard</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><text y='13' font-size='13'>🖥️</text></svg>">
+<link rel="stylesheet" href="/style.css">
+</head>
+<body>
+
+<div id="gate" class="gate" hidden>
+  <form class="gate-card" id="gate-form">
+    <h1>Server Dashboard</h1>
+    <p>Paste the access token printed in the server console.</p>
+    <input id="gate-input" type="password" placeholder="access token" autocomplete="off" spellcheck="false">
+    <button type="submit">Unlock</button>
+    <p class="gate-err" id="gate-err" hidden>That token was rejected.</p>
+  </form>
+</div>
+
+<div id="app" hidden>
+
+  <header class="topbar">
+    <div class="ident">
+      <span class="dot" id="live-dot"></span>
+      <div>
+        <h1 id="hostname">—</h1>
+        <p id="osline">connecting…</p>
+      </div>
+    </div>
+    <div class="topmeta">
+      <div class="meta"><span>Uptime</span><strong id="uptime">—</strong></div>
+      <div class="meta"><span>Address</span><strong id="address">—</strong></div>
+    </div>
+  </header>
+
+  <div class="banner" id="pending-banner" hidden>
+    <div>
+      <strong id="pending-title">Shutdown scheduled</strong>
+      <span id="pending-sub">in 30s</span>
+    </div>
+    <button class="btn btn-cancel" id="abort-btn">Cancel it</button>
+  </div>
+
+  <main>
+    <section class="tiles">
+      <article class="tile">
+        <header><h2>CPU</h2><span id="cpu-model" class="sub">—</span></header>
+        <p class="big"><span id="cpu-pct">—</span><i>%</i></p>
+        <div class="bar"><div class="fill" id="cpu-bar"></div></div>
+        <div class="cores" id="cores"></div>
+        <p class="foot" id="cpu-foot" hidden></p>
+      </article>
+
+      <article class="tile">
+        <header><h2>Memory</h2><span id="mem-sub" class="sub">—</span></header>
+        <p class="big"><span id="mem-pct">—</span><i>%</i></p>
+        <div class="bar"><div class="fill" id="mem-bar"></div></div>
+        <p class="foot" id="mem-foot">—</p>
+      </article>
+
+      <article class="tile">
+        <header><h2>Storage</h2><span class="sub" id="disk-sub">—</span></header>
+        <p class="big"><span id="disk-free">—</span><i>free</i></p>
+        <div class="bar"><div class="fill" id="disk-bar"></div></div>
+        <p class="foot" id="disk-foot">—</p>
+      </article>
+
+      <article class="tile">
+        <header><h2>Network</h2><span class="sub">live throughput</span></header>
+        <p class="big net"><span id="net-rx">—</span></p>
+        <p class="foot" id="net-foot">—</p>
+      </article>
+    </section>
+
+    <section class="card">
+      <header class="card-head"><h2>Drives</h2><span class="sub" id="drives-count"></span></header>
+      <div class="drives" id="drives"></div>
+    </section>
+
+    <div class="split">
+      <section class="card">
+        <header class="card-head">
+          <h2>Listening on</h2><span class="sub" id="ports-count"></span>
+        </header>
+        <div class="scroll" id="ports"></div>
+      </section>
+
+      <section class="card">
+        <header class="card-head">
+          <h2>Heaviest processes</h2><span class="sub">by memory</span>
+        </header>
+        <div class="scroll" id="procs"></div>
+      </section>
+    </div>
+
+    <section class="card" id="containers-card" hidden>
+      <header class="card-head"><h2>Containers</h2><span class="sub" id="containers-count"></span></header>
+      <div class="scroll" id="containers"></div>
+    </section>
+
+    <section class="card" id="wsl-card" hidden>
+      <header class="card-head"><h2>WSL distributions</h2></header>
+      <div class="scroll" id="wsl"></div>
+    </section>
+
+    <section class="card">
+      <header class="card-head">
+        <h2>Running services</h2>
+        <input id="svc-filter" class="filter" type="search" placeholder="filter…" autocomplete="off">
+      </header>
+      <div class="scroll tall" id="services"></div>
+    </section>
+
+    <section class="card danger-card">
+      <header class="card-head"><h2>Power</h2><span class="sub" id="power-sub">—</span></header>
+      <p class="danger-note">
+        These act on <strong id="power-host">this machine</strong> immediately after the grace period.
+        You get a countdown and a cancel button before anything happens.
+      </p>
+      <div class="power-actions">
+        <button class="btn btn-warn" id="restart-btn">Restart</button>
+        <button class="btn btn-danger" id="shutdown-btn">Shut down</button>
+      </div>
+      <p class="power-error" id="power-error" hidden></p>
+    </section>
+  </main>
+
+  <footer class="foot-note">
+    Polling every 2s · <span id="stamp">—</span>
+    <button class="linkish" id="forget">forget token</button>
+  </footer>
+</div>
+
+<div class="modal" id="modal" hidden>
+  <div class="modal-card">
+    <h2 id="modal-title">Restart this machine?</h2>
+    <p id="modal-body">Everything running on it will stop.</p>
+    <div class="modal-actions">
+      <button class="btn btn-ghost" id="modal-cancel">Never mind</button>
+      <button class="btn btn-danger" id="modal-ok">Yes, do it</button>
+    </div>
+  </div>
+</div>
+
+<script src="/app.js"></script>
+</body>
+</html>

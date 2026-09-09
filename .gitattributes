@@ -1,0 +1,5 @@
+# Shell scripts and unit files must land on Linux with LF endings, or bash fails
+# with "bad interpreter". Windows launchers keep CRLF.
+* text=auto eol=lf
+*.bat text eol=crlf
+*.ps1 text eol=crlf
