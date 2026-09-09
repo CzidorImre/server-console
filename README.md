@@ -23,15 +23,21 @@ refreshes every ~1.5s; the heavier service/port scan is cached for 10s.
 
 ## Install on a Linux server
 
-Copy the folder over and run the installer:
+Clone it into place and run the installer:
 
 ```bash
-rsync -av --exclude config.json ./ user@server:/tmp/server-dashboard/
-ssh user@server 'sudo bash /tmp/server-dashboard/deploy/install.sh'
+sudo git clone https://github.com/CzidorImre/server-console.git /opt/server-dashboard
+sudo bash /opt/server-dashboard/deploy/install.sh
 ```
 
-It installs to `/opt/server-dashboard`, registers a systemd unit, starts it, and prints
-the URL with the access token. Node must already be present — on Debian/Ubuntu:
+The installer detects that it is already at its destination, skips copying, registers a
+systemd unit, starts it, and prints the URL with the access token. Updating later is:
+
+```bash
+cd /opt/server-dashboard && sudo git pull && sudo systemctl restart server-dashboard
+```
+
+Node must already be present — on Debian/Ubuntu:
 
 ```bash
 curl -fsSL https://deb.nodesource.com/setup_22.x | sudo -E bash - && sudo apt install -y nodejs

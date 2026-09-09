@@ -18,14 +18,20 @@ if ! command -v node >/dev/null 2>&1; then
   exit 1
 fi
 
-echo "Installing from $SRC to $DEST"
-mkdir -p "$DEST"
-# Keep any existing config.json (it holds the access token).
-for item in server.js selftest.js package.json README.md lib public; do
-  [ -e "$SRC/$item" ] && cp -r "$SRC/$item" "$DEST/"
-done
-# The Windows collectors are dead weight here but harmless; drop them for tidiness.
-rm -f "$DEST/lib/collect-fast.ps1" "$DEST/lib/collect-slow.ps1" "$DEST/lib/collect-win.js"
+if [ "$SRC" = "$DEST" ]; then
+  # Already living at the destination — a git clone straight into /opt. Nothing to
+  # copy, and copying onto itself would destroy the files. Updates are `git pull`.
+  echo "Running in place at $DEST"
+else
+  echo "Installing from $SRC to $DEST"
+  mkdir -p "$DEST"
+  # Keep any existing config.json (it holds the access token).
+  for item in server.js selftest.js package.json README.md lib public; do
+    [ -e "$SRC/$item" ] && cp -r "$SRC/$item" "$DEST/"
+  done
+  # The Windows collectors are dead weight here but harmless; drop them for tidiness.
+  rm -f "$DEST/lib/collect-fast.ps1" "$DEST/lib/collect-slow.ps1" "$DEST/lib/collect-win.js"
+fi
 
 chmod 700 "$DEST"
 [ -f "$DEST/config.json" ] && chmod 600 "$DEST/config.json"
