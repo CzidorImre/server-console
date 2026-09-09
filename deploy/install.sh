@@ -38,7 +38,10 @@ chmod 700 "$DEST"
 
 install -m 644 "$SRC/deploy/server-dashboard.service" "$UNIT"
 systemctl daemon-reload
-systemctl enable --now server-dashboard
+systemctl enable server-dashboard
+# `enable --now` does nothing when the unit is already running, so an install run as
+# an update would leave the old code live. Restart explicitly instead.
+systemctl restart server-dashboard
 
 sleep 1
 systemctl --no-pager --lines=0 status server-dashboard || true
